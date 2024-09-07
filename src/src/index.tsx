@@ -106,9 +106,13 @@ const useAutConnector = ({
     dispatch({ type: "SET_STATE", payload: { isConnecting: true } });
     try {
       // const changed = state.multiSignerId !== multiSignerId(address, chainId);
-      const signer = await getEthersSigner({ chainId });
-      const provider = getEthersProvider({ chainId });
-      const multiSigner = { signer, readOnlySigner: provider };
+      const { signer, provider } = await getEthersSigner({ chainId });
+      const readonlyProvider = getEthersProvider({ chainId });
+      const multiSigner = {
+        signer,
+        readOnlySigner: readonlyProvider,
+        provider
+      };
 
       let newState = {
         ...state,
@@ -224,12 +228,13 @@ const useAutConnector = ({
         }
       }
 
-      const signer = await getEthersSigner({ chainId });
-      const provider = getEthersProvider({ chainId });
+      const { signer, provider } = await getEthersSigner({ chainId });
+      const readOnlyProvider = getEthersProvider({ chainId });
       if (signer) {
         const multiSigner = {
           signer: signer,
-          readOnlySigner: provider as any
+          readOnlySigner: readOnlyProvider as any,
+          provider
         };
 
         const newState: Partial<S> = {
