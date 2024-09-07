@@ -1,0 +1,47 @@
+{
+  "name": "@aut-labs/connector",
+  "version": "0.0.95",
+  "description": "Learning how to create React modules using TypeScript!",
+  "main": "./lib/cjs/index.js",
+  "module": "./lib/esm/index.js",
+  "types": "./lib/esm/index.d.ts",
+  "license": "MIT",
+  "scripts": {
+    "build": "npm run build:esm && npm run build:cjs",
+    "build:esm": "./node_modules/typescript/bin/tsc",
+    "build:cjs": "./node_modules/typescript/bin/tsc --module commonjs --outDir lib/cjs",
+    "prepublishOnly": "npm run build"
+  },
+  "peerDependencies": {
+    "@mui/icons-material": "^5.15.7",
+    "@mui/material": "^5.15.7",
+    "ethers": "^6.10.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "viem": "^2.7.1",
+    "wagmi": "^2.5.5"
+  },
+  "devDependencies": {
+    "@mui/icons-material": "^5.15.7",
+    "@mui/material": "^5.15.7",
+    "@types/react": "^18.2.48",
+    "@types/react-dom": "^18.2.18",
+    "ethers": "^6.10.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "typescript": "^5.0.4",
+    "viem": "^2.7.1",
+    "wagmi": "^2.5.5"
+  },
+  "files": [
+    "/lib"
+  ],
+  "dependencies": {
+    "@web3auth/base": "^8.0.0",
+    "@web3auth/ethereum-provider": "^8.0.1",
+    "@web3auth/modal": "^8.0.1",
+    "@web3auth/openlogin-adapter": "^8.0.1",
+    "@web3auth/wallet-services-plugin": "^8.0.1",
+    "@web3auth/web3auth-wagmi-connector": "^6.0.0"
+  }
+}
