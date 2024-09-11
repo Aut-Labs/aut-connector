@@ -1,11 +1,4 @@
-import React, {
-  ReactNode,
-  createContext,
-  useCallback,
-  useContext,
-  useMemo,
-  useState
-} from "react";
+import React, { useMemo, useState } from "react";
 import {
   styled,
   Typography,
@@ -17,16 +10,15 @@ import {
   useTheme,
   Alert,
   Box,
-  Link
+  Link,
+  Theme
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import { Connector, useConnect } from "wagmi";
-import MetamaskIcon from "./assets/Metamask";
-import WalletConnectIcon from "./assets/WalletConnect";
-import CoinbaseIcon from "./assets/Coinbase";
-import Web3Auth from "./assets/Web3Auth";
 import AutLogo from "./assets/AutLogo";
-import { S } from "./types";
+import { AutWalletConnectorProps } from "./types";
+import { useWalletConnector } from "./WalletConnectorProvider";
+import { getBtnConfig } from "./buttons";
 
 const DialogInnerContent = styled("div")({
   display: "flex",
@@ -39,109 +31,10 @@ const DialogInnerContent = styled("div")({
   marginBottom: "16px"
 });
 
-// const ErrorWrapper = styled(Box)({
-//   backgroundColor: "rgba(254, 202, 202, 0.16)",
-//   padding: "20px",
-//   width: "80%",
-//   marginBottom: "12px",
-//   borderRadius: "16px",
-//   textAlign: "center"
-// });
-const getBtnConfig = (win: any) => ({
-  metaMask: {
-    order: 0,
-    label: "metaMask",
-    forMobile: !!win.ethereum,
-    icon: <MetamaskIcon />
-  },
-  walletConnect: {
-    order: 1,
-    label: "WalletConnect",
-    forMobile: true,
-    icon: <WalletConnectIcon />
-  },
-  coinbaseWalletSDK: {
-    order: 2,
-    label: "Coinbase",
-    forMobile: !!win.ethereum,
-    icon: <CoinbaseIcon />
-  },
-  web3auth: {
-    order: 3,
-    label: "Web3Auth",
-    forMobile: !!win.ethereum,
-    icon: <Web3Auth />
-  }
-})
-
-type WalletConnectOpenFn = () => Promise<S>;
-type WalletConnectCloseFn = (state: S) => void;
-
-type WalletConnectState = {
-  open: WalletConnectOpenFn;
-  close: WalletConnectCloseFn;
-  isOpen: boolean;
-};
-
-const WalletConnectorContext = createContext<WalletConnectState>({
-  open: async () => {
-    throw new Error("open function not implemented");
-  },
-  close: async (state: S) => {
-    console.warn("close function not implemented");
-  },
-  isOpen: false
-});
-
-export const useWalletConnector = () => useContext(WalletConnectorContext);
-
-interface WalletConnectorProviderProps {
-  children: ReactNode;
-}
-
-const StyledWalletConnectorProvider = styled(WalletConnectorContext.Provider)({
-  ".wcm-modal": {
-    zIndex: 99999
-  }
-});
-
-export const WalletConnectorProvider: React.FC<
-  WalletConnectorProviderProps
-> = ({ children }) => {
-  const [isOpen, setIsOpen] = useState<boolean>(false);
-  const [promiseResolver, setPromiseResolver] = useState<WalletConnectCloseFn>(
-    () => {}
-  );
-
-  const open: WalletConnectOpenFn = useCallback(() => {
-    setIsOpen(true);
-    return new Promise<S>((resolve) => {
-      setPromiseResolver(() => resolve);
-    });
-  }, []);
-
-  const close: WalletConnectCloseFn = useCallback(
-    (result: S) => {
-      setIsOpen(false);
-      if (promiseResolver) {
-        promiseResolver(result);
-      }
-    },
-    [promiseResolver]
-  );
-
-  return (
-    <StyledWalletConnectorProvider value={{ open, close, isOpen }}>
-      {children}
-    </StyledWalletConnectorProvider>
-  );
-};
-
 export const AutWalletConnector = ({
-  titleContent,
   loadingContent,
   connect
-}) => {
+}: AutWalletConnectorProps) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const isXXL = useMediaQuery(theme.breakpoints.up("xxl" as any));
@@ -164,6 +57,25 @@ export const AutWalletConnector = ({
         return btnConfig[a.id].order - btnConfig[b.id].order;
       });
   }, [connectors]);
+
+  const handleConnect = async (c: Connector) => {
+    try {
+      setError(null);
+      setIsConnecting(true);
+      setConnector(c);
+      const newState = await connect(c);
+      if (newState?.error) {
+        setError(newState?.error);
+      } else {
+        close(newState);
+      }
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setConnector(null);
+      setIsConnecting(false);
+    }
+  };
 
   return (
     <>
@@ -229,9 +141,7 @@ export const AutWalletConnector = ({
         >
           <IconButton
             aria-label="close"
-            onClick={() => {
-              close(null);
-            }}
+            onClick={() => close(null)}
             type="button"
             sx={{
               color: "white",
@@ -276,21 +186,13 @@ export const AutWalletConnector = ({
                   {filteredConnectors.map((c) => (
                     // @ts-ignore
                     <Button
-                      disabled={isConnecting || c.id === connector?.id || (isMobile && !btnConfig[c.id]?.forMobile)}
+                      disabled={
+                        isConnecting ||
+                        c.id === connector?.id ||
+                        (isMobile && !btnConfig[c.id]?.forMobile)
+                      }
                       key={c.id}
-                      onClick={async () => {
-                        setError(null);
-                        setIsConnecting(true);
-                        setConnector(c);
-                        const newState: any = await connect(c);
-                        if (newState?.error) {
-                          setError(newState?.error);
-                        } else {
-                          close(newState);
-                        }
-                        setConnector(null);
-                        setIsConnecting(false);
-                      }}
+                      onClick={() => handleConnect(c)}
                       endIcon={btnConfig[c.id]?.icon}
                       variant="outlined"
                       size="normal"
@@ -361,7 +263,7 @@ export const AutWalletConnector = ({
               sx={{
                 mt: 2,
                 textAlign: "center",
-                color: (theme) => theme.palette["offWhite"].dark
+                color: (theme: Theme) => theme.palette["offWhite"].dark
               }}
               variant="caption"
             >

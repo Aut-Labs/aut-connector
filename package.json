@@ -1,6 +1,6 @@
 {
   "name": "@aut-labs/connector",
-  "version": "0.0.100",
+  "version": "0.0.169",
   "description": "Learning how to create React modules using TypeScript!",
   "main": "./lib/cjs/index.js",
   "module": "./lib/esm/index.js",
@@ -42,6 +42,7 @@
     "@web3auth/modal": "^8.0.1",
     "@web3auth/openlogin-adapter": "^8.0.1",
     "@web3auth/wallet-services-plugin": "^8.0.1",
-    "@web3auth/web3auth-wagmi-connector": "^6.0.0"
+    "@web3auth/web3auth-wagmi-connector": "^6.0.0",
+    "siwe": "^2.3.2"
   }
 }

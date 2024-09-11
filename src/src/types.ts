@@ -1,4 +1,6 @@
 import { Connector } from "wagmi";
+import { AuthSig } from "./aut-sig";
+import { ReactNode } from "react";
 
 export type S = {
   address: string;
@@ -10,7 +12,16 @@ export type S = {
   chainId: number;
   multiSigner: any;
   multiSignerId: string;
-  connect: (c?: Connector) => Promise<S>;
+  authSig?: AuthSig;
+  renewAuthSig: () => Promise<S>;
+  connect: (c: Connector) => Promise<S>;
   disconnect: () => Promise<void>;
   setStateChangeCallback: () => (s: S) => void;
 };
+
+
+export interface AutWalletConnectorProps {
+  titleContent?: ReactNode;
+  loadingContent: ReactNode;
+  connect: (c: Connector) => Promise<S>;
+}

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import {
   Connector,
   ConnectorAlreadyConnectedError,
@@ -11,69 +11,50 @@ import {
 import { getEthersProvider, getEthersSigner } from "./ethers";
 import { ParseErrorMessage } from "./error-parser";
 import { wagmiConfig } from "./setup.config";
-import {
-  AutWalletConnector,
-  WalletConnectorProvider,
-  useWalletConnector
-} from "./wallet-connector";
 import { S } from "./types";
-
-interface AutConnectorProps {
-  defaultChainId?: number;
-}
-
-const initialState: Partial<S> = {
-  address: null,
-  multiSigner: null,
-  multiSignerId: null,
-  error: null,
-  status: "disconnected",
-  isConnecting: false,
-  isConnected: false,
-  initialized: false,
-  chainId: null
-};
-
-function reducer(state: S, action: any) {
-  switch (action.type) {
-    case "SET_STATE":
-      const newState = { ...state, ...action.payload };
-      return newState;
-    default:
-      return state;
-  }
-}
+import { AuthSig, signAutMessage, validateAndGetCacheAuthSig } from "./aut-sig";
+import {
+  useWalletConnector,
+  WalletConnectorProvider
+} from "./WalletConnectorProvider";
+import { AutWalletConnector } from "./wallet-connector";
 
 const multiSignerId = (address: string, chainId: number) => {
   return `${address}-${chainId}`;
 };
 
-const useAutConnector = ({
-  defaultChainId
-}: Partial<AutConnectorProps> = {}) => {
-  const { address, status, chainId: currentChainId } = useAccount();
+const useAutConnector = () => {
+  const { defaultChainId, requestSig, dispatch, state } = useWalletConnector();
+  const {
+    address,
+    status,
+    chainId: currentChainId,
+    isConnected,
+    isConnecting,
+    isReconnecting
+  } = useAccount();
   const { connectAsync, connectors } = useConnect();
   const { disconnect } = useDisconnect();
   const { chains } = useSwitchChain();
   const initialized = useRef<boolean>(false);
   const stateChangeCallback = useRef<(s: S) => void | null>(null);
-  const [state, dispatch] = useReducer(reducer, initialState);
+  const requestSigRef = useRef(requestSig);
+  const signing = useRef(false);
+  const previousState = useRef({
+    address,
+    isConnected,
+    isCorrectChain: false,
+    chainId: currentChainId
+  });
 
-  const isConnected = useMemo(() => {
-    return status === "connected";
-  }, [status]);
-
-  const isConnecting = useMemo(() => {
-    return status === "connecting";
-  }, [status]);
+  const isReady = useMemo(
+    () => !(isReconnecting || isConnecting),
+    [isReconnecting, isConnecting]
+  );
 
   const isCorrectChain = useMemo(() => {
     return chains.some((v) => v.id === currentChainId);
   }, [chains, currentChainId]);
-
-  const isAddressChanged = useMemo(() => {
-    return state.address !== address;
-  }, [state.address, address]);
 
   const chainId = useMemo(() => {
     if (isCorrectChain) return currentChainId;
@@ -88,24 +69,49 @@ const useAutConnector = ({
     []
   );
 
-  useEffect(() => {
-    if (!isCorrectChain && isConnected) {
-      disconnect();
-    }
-  }, [isCorrectChain, isConnected]);
+  // useEffect(() => {
+  //   // if (!isCorrectChain && isConnected) {
+  //   //   disconnect();
+  //   // }
+  // }, [isCorrectChain, isConnected]);
 
   useEffect(() => {
-    if (address && isConnected && isCorrectChain) {
-      initialiseSDKWithSigner();
-    } else if (!address) {
-      initialiseSDKWithoutSigner();
-    }
-  }, [isAddressChanged, isConnected, isCorrectChain]);
+    if (isReady) {
+      const prev = previousState.current;
+      const hasAddressChanged = prev.address !== address;
+      const hasConnectionStatusChanged = prev.isConnected !== isConnected;
+      const hasChainChanged = prev.isCorrectChain !== isCorrectChain;
+      const hasChainIdChanged = prev.chainId !== chainId;
 
-  const initialiseSDKWithSigner = async () => {
-    dispatch({ type: "SET_STATE", payload: { isConnecting: true } });
+      const hasChanged =
+        hasAddressChanged ||
+        hasConnectionStatusChanged ||
+        hasChainChanged ||
+        hasChainIdChanged;
+
+      const isConnectionValid = address && isConnected && isCorrectChain;
+
+      let initialiseWithSigner = false;
+
+      if (hasChanged && isConnectionValid) {
+        initialiseWithSigner = true;
+      }
+
+      if (initialiseWithSigner) {
+        _initialiseSDKWithSigner();
+      } else if (!address || !isCorrectChain) {
+        _initialiseSDKWithoutSigner();
+      }
+      previousState.current = { address, isConnected, isCorrectChain, chainId };
+    }
+  }, [address, isConnected, isCorrectChain, isReady, chainId]);
+
+  const _initialiseSDKWithSigner = async () => {
+    if (signing.current) return;
+    let newState = {
+      ...state
+    };
     try {
-      // const changed = state.multiSignerId !== multiSignerId(address, chainId);
       const { signer, provider } = await getEthersSigner({ chainId });
       const readonlyProvider = getEthersProvider({ chainId });
       const multiSigner = {
@@ -113,9 +119,8 @@ const useAutConnector = ({
         readOnlySigner: readonlyProvider,
         provider
       };
-
-      let newState = {
-        ...state,
+      newState = {
+        ...newState,
         chainId,
         status,
         address,
@@ -124,33 +129,35 @@ const useAutConnector = ({
         isConnecting: false,
         isConnected: !!signer
       };
+      newState.authSig = await _getAuthSig(newState as S);
       if (stateChangeCallback.current) {
         stateChangeCallback.current(newState);
       }
-      dispatch({
-        type: "SET_STATE",
-        payload: newState
-      });
     } catch (err) {
       console.log(err);
     }
+    dispatch({
+      type: "SET_STATE",
+      payload: newState
+    });
     initialized.current = true;
   };
 
-  const initialiseSDKWithoutSigner = async () => {
-    dispatch({ type: "SET_STATE", payload: { isConnecting: true } });
+  const _initialiseSDKWithoutSigner = async () => {
+    let newState: S = {
+      ...state
+    };
 
     try {
       let newChainId = isCorrectChain
         ? chainId
         : defaultChainId || chains[0].id;
-      // const changed = state.multiSignerId !== multiSignerId(null, newChainId);
       const provider = getEthersProvider({ chainId: newChainId });
       const multiSigner = { signer: provider, readOnlySigner: provider };
 
-      let newState = {
-        ...state,
-        chainId,
+      newState = {
+        ...newState,
+        chainId: newChainId,
         status,
         address,
         multiSigner,
@@ -161,20 +168,19 @@ const useAutConnector = ({
       if (stateChangeCallback.current) {
         stateChangeCallback.current(newState);
       }
-      dispatch({
-        type: "SET_STATE",
-        payload: newState
-      });
     } catch (err) {
       console.log(err);
     }
+    dispatch({
+      type: "SET_STATE",
+      payload: newState
+    });
     initialized.current = true;
   };
 
-  const _connect = async (c: Connector) => {
-    // dispatch({ type: "SET_STATE", payload: { error: null } });
+  const _connect = async (c: Connector): Promise<S> => {
     try {
-      let selectedConnector: Connector;
+      let selectedConnector: Connector = c;
       for (const connector of connectors) {
         if (c.id === connector.id) {
           selectedConnector = connector;
@@ -202,17 +208,13 @@ const useAutConnector = ({
             status: "disconnected",
             address: null
           };
-          // dispatch({
-          //   type: "SET_STATE",
-          //   payload: newState
-          // });
           return {
             ...state,
             ...newState
           };
         } else {
           const errorMsg = ParseErrorMessage(error);
-          const newState = {
+          const newState: Partial<S> = {
             error: errorMsg,
             isConnecting: false,
             isConnected: false,
@@ -220,7 +222,6 @@ const useAutConnector = ({
             status: "disconnected",
             address: null
           };
-          // dispatch({ type: "SET_STATE", payload: newState });
           return {
             ...state,
             ...newState
@@ -246,33 +247,65 @@ const useAutConnector = ({
           isConnecting: false,
           isConnected: true
         };
-
-        // dispatch({ type: "SET_STATE", payload: newState });
-
+        newState.authSig = await _getAuthSig(newState as S);
         return {
           ...state,
           ...newState
         };
       }
     } catch (err) {
-      // dispatch({ type: "SET_STATE", payload: { isConnecting: false } });
       console.error(err);
     }
-    // return {
-    //   ...state,
-    //   chainId,
-    //   status,
-    //   address
-    // };
   };
 
-  const connect = useCallback(
-    async (c?: Connector) => {
-      const result = await _connect(c);
-      return result;
-    },
-    [isConnected, connectors, address, chainId, isCorrectChain]
-  );
+  const _getAuthSig = async (state: S): Promise<AuthSig> => {
+    let authSig: AuthSig | null = await validateAndGetCacheAuthSig(
+      state.chainId,
+      state.multiSigner.provider
+    );
+    if (authSig) return authSig;
+
+    if (requestSigRef.current) {
+      const thirtyDays = 30 * 24 * 60 * 60 * 1000;
+      const expirationTime = new Date(Date.now() + thirtyDays).toISOString();
+      try {
+        authSig = await signAutMessage({
+          provider: state.multiSigner.provider,
+          account: state.address,
+          resources: [],
+          derivedVia: "web3.eth.personal.sign",
+          chainId: state.chainId,
+          expiration: expirationTime,
+          uri: window.location.origin
+        });
+      } catch (err) {
+        console.error(err);
+      }
+    }
+    return authSig;
+  };
+
+  const connect = useCallback(async (c: Connector) => {
+    signing.current = requestSigRef.current;
+    const s = await _connect(c);
+    dispatch({
+      type: "SET_STATE",
+      payload: s
+    });
+    signing.current = false;
+    return s;
+  }, []);
+
+  const renewAuthSig = useCallback(async () => {
+    const authSig = await _getAuthSig(state as S);
+    dispatch({
+      type: "SET_STATE",
+      payload: {
+        authSig
+      }
+    });
+    return { ...state, authSig };
+  }, [state]);
 
   return {
     ...state,
@@ -282,6 +315,7 @@ const useAutConnector = ({
     address,
     status,
     initialized: initialized.current,
+    renewAuthSig,
     connect,
     disconnect,
     setStateChangeCallback: setStateChangeCallbackHandler
@@ -290,8 +324,8 @@ const useAutConnector = ({
 
 export {
   useAutConnector,
-  wagmiConfig,
   useWalletConnector,
+  wagmiConfig,
   WalletConnectorProvider,
   AutWalletConnector
 };
