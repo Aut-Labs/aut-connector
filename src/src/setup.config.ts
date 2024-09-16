@@ -4,7 +4,7 @@ import { polygon } from "wagmi/chains";
 import { defineChain } from "viem";
 import Web3AuthConnectorInstance from "./Web3AuthConnectorInstance";
 
-export const polygonAmoy = /*#__PURE__*/ defineChain({
+const polygonAmoy = /*#__PURE__*/ defineChain({
   id: 80_002,
   name: "Polygon Amoy",
   nativeCurrency: { name: "MATIC", symbol: "MATIC", decimals: 18 },
@@ -26,6 +26,9 @@ export const wagmiConfig = createConfig({
   chains: [polygonAmoy, polygon],
   connectors: [
     metaMask({
+      extensionOnly: true,
+      preferDesktop: true,
+      injectProvider: true,
       forceInjectProvider: true
     }),
     Web3AuthConnectorInstance([polygonAmoy, polygon]),
@@ -35,6 +38,7 @@ export const wagmiConfig = createConfig({
     })
   ],
   multiInjectedProviderDiscovery: true,
+  syncConnectedChain: true,
   storage: createStorage({ storage: window.localStorage }),
   transports: {
     [polygon.id]: http(),
