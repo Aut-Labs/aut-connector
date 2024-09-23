@@ -13,6 +13,7 @@ export type S = {
   multiSigner: any;
   multiSignerId: string;
   authSig?: AuthSig;
+  connectors: Connector[];
   renewAuthSig: () => Promise<S>;
   connect: (c: Connector) => Promise<S>;
   disconnect: () => Promise<void>;

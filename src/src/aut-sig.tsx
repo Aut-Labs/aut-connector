@@ -80,7 +80,7 @@ export const signAutMessage = async ({
   const preparedMessage: Partial<SiweMessage> = {
     domain: globalThis.location.host,
     address: getAddress(account),
-    version: "0.1",
+    version: "1",
     chainId,
     expirationTime: expiration,
     nonce,

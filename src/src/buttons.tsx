@@ -3,12 +3,12 @@ import MetamaskIcon from "./assets/Metamask";
 import WalletConnectIcon from "./assets/WalletConnect";
 import CoinbaseIcon from "./assets/Coinbase";
 import Web3Auth from "./assets/Web3Auth";
+import { Connector } from "wagmi";
 
-
-export const getBtnConfig = (win: any) => ({
+export const buttonConfigs = (win: any) => ({
   metaMaskSDK: {
     order: 0,
-    label: "metaMask",
+    label: "MetaMask",
     forMobile: !!win.ethereum,
     icon: <MetamaskIcon />
   },
@@ -31,3 +31,17 @@ export const getBtnConfig = (win: any) => ({
     icon: <Web3Auth />
   }
 });
+
+export const getFilteredConnectors = (
+  connectors: readonly Connector[],
+  win: any
+) => {
+  const btnConfig = buttonConfigs(win);
+  return connectors
+    .filter((c) => !!btnConfig[c.id])
+    .sort((a, b) => btnConfig[a.id].order - btnConfig[b.id].order)
+    .map((c) => ({
+      ...c,
+      icon: c.icon || btnConfig[c.id].icon
+    }));
+};

@@ -18,7 +18,7 @@ import { Connector, useConnect } from "wagmi";
 import AutLogo from "./assets/AutLogo";
 import { AutWalletConnectorProps } from "./types";
 import { useWalletConnector } from "./WalletConnectorProvider";
-import { getBtnConfig } from "./buttons";
+import { buttonConfigs, getFilteredConnectors } from "./buttons";
 
 const DialogInnerContent = styled("div")({
   display: "flex",
@@ -45,18 +45,12 @@ export const AutWalletConnector = ({
   const [isConnecting, setIsConnecting] = useState<boolean>(false);
   const [error, setError] = useState<string>();
 
-  const btnConfig = useMemo(() => {
-    const _config = getBtnConfig(window);
-    return _config;
-  }, [window]);
+  const btnConfig = useMemo(() => buttonConfigs(window), [window]);
 
-  const filteredConnectors = useMemo(() => {
-    return connectors
-      .filter((c) => !!btnConfig[c.id])
-      .sort((a, b) => {
-        return btnConfig[a.id].order - btnConfig[b.id].order;
-      });
-  }, [connectors]);
+  const filteredConnectors = useMemo(
+    () => getFilteredConnectors(connectors, window),
+    [connectors]
+  );
 
   const handleConnect = async (c: Connector) => {
     try {

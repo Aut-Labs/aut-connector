@@ -18,6 +18,7 @@ import {
   WalletConnectorProvider
 } from "./WalletConnectorProvider";
 import { AutWalletConnector } from "./wallet-connector";
+import { getFilteredConnectors } from "./buttons";
 
 const multiSignerId = (address: string, chainId: number) => {
   return `${address}-${chainId}`;
@@ -33,7 +34,7 @@ const useAutConnector = () => {
     isConnecting,
     isReconnecting
   } = useAccount();
-  const { connectAsync, connectors } = useConnect();
+  const { connectAsync, connectors: allConnectors } = useConnect();
   const { disconnect } = useDisconnect();
   const { chains } = useSwitchChain();
   const initialized = useRef<boolean>(false);
@@ -52,6 +53,11 @@ const useAutConnector = () => {
     [isReconnecting, isConnecting]
   );
 
+  const filteredConnectors = useMemo(
+    () => getFilteredConnectors(allConnectors, window),
+    [allConnectors]
+  );
+
   const isCorrectChain = useMemo(() => {
     return chains.some((v) => v.id === currentChainId);
   }, [chains, currentChainId]);
@@ -61,6 +67,10 @@ const useAutConnector = () => {
     if (defaultChainId) return defaultChainId;
     return chains[0].id;
   }, [chains, currentChainId, isCorrectChain, defaultChainId]);
+
+  const defaultChain = useMemo(() => {
+    return wagmiConfig.chains.find((v) => v.id === defaultChainId);
+  }, [defaultChainId]);
 
   const setStateChangeCallbackHandler = useCallback(
     (callback: (s: S) => void) => {
@@ -112,8 +122,8 @@ const useAutConnector = () => {
       ...state
     };
     try {
-      const { signer, provider } = await getEthersSigner({ chainId });
-      const readonlyProvider = getEthersProvider({ chainId });
+      const { signer, provider } = await getEthersSigner({ chainId }, defaultChain);
+      const readonlyProvider = getEthersProvider({ chainId }, defaultChain);
       const multiSigner = {
         signer,
         readOnlySigner: readonlyProvider,
@@ -133,6 +143,7 @@ const useAutConnector = () => {
       if (stateChangeCallback.current) {
         stateChangeCallback.current(newState);
       }
+      console.log("Connected with signer");
     } catch (err) {
       console.log(err);
     }
@@ -152,7 +163,7 @@ const useAutConnector = () => {
       let newChainId = isCorrectChain
         ? chainId
         : defaultChainId || chains[0].id;
-      const provider = getEthersProvider({ chainId: newChainId });
+      const provider = getEthersProvider({ chainId: newChainId }, defaultChain);
       const multiSigner = { signer: provider, readOnlySigner: provider };
 
       newState = {
@@ -168,6 +179,7 @@ const useAutConnector = () => {
       if (stateChangeCallback.current) {
         stateChangeCallback.current(newState);
       }
+      console.log("Connected with read only signer");
     } catch (err) {
       console.log(err);
     }
@@ -181,7 +193,7 @@ const useAutConnector = () => {
   const _connect = async (c: Connector): Promise<S> => {
     try {
       let selectedConnector: Connector = c;
-      for (const connector of connectors) {
+      for (const connector of filteredConnectors) {
         if (c.id === connector.id) {
           selectedConnector = connector;
           break;
@@ -229,8 +241,8 @@ const useAutConnector = () => {
         }
       }
 
-      const { signer, provider } = await getEthersSigner({ chainId });
-      const readOnlyProvider = getEthersProvider({ chainId });
+      const { signer, provider } = await getEthersSigner({ chainId }, defaultChain);
+      const readOnlyProvider = getEthersProvider({ chainId }, defaultChain);
       if (signer) {
         const multiSigner = {
           signer: signer,
@@ -315,6 +327,7 @@ const useAutConnector = () => {
     address,
     status,
     initialized: initialized.current,
+    connectors: filteredConnectors,
     renewAuthSig,
     connect,
     disconnect,
@@ -326,6 +339,6 @@ export {
   useAutConnector,
   useWalletConnector,
   wagmiConfig,
+  AutWalletConnector,
   WalletConnectorProvider,
-  AutWalletConnector
 };

@@ -15,7 +15,7 @@ type WalletConnectCloseFn = (state?: S) => void;
 
 type WalletConnectState = {
   defaultChainId: number;
-  requestSig: boolean;
+  requestSig?: boolean;
   state: S;
   dispatch: React.Dispatch<any>;
   open: WalletConnectOpenFn;

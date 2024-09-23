@@ -1,10 +1,13 @@
 import { getPublicClient, getWalletClient } from "@wagmi/core";
 import { BrowserProvider, FallbackProvider, JsonRpcProvider } from "ethers";
-import { type Transport } from "viem";
+import { Chain, type Transport } from "viem";
 import { wagmiConfig } from "./setup.config";
 
-export function clientToProvider(client: any) {
-  const { chain, transport } = client as any;
+export function clientToProvider(client: any, defaultChain: Chain) {
+  let { chain, transport } = client as any;
+  if (!chain) {
+    chain = defaultChain;
+  }
   const network = {
     chainId: chain.id,
     name: chain.name,
@@ -20,15 +23,19 @@ export function clientToProvider(client: any) {
   return new JsonRpcProvider(transport.url, network);
 }
 
-export function getEthersProvider({ chainId }: { chainId?: number } = {}) {
+export function getEthersProvider({ chainId }: { chainId?: number } = {}, defaultChain: Chain) {
   const client = getPublicClient(wagmiConfig, {
-    chainId: chainId as any
+    chainId: (chainId || defaultChain.id) as any
   });
-  return clientToProvider(client);
+  if (!client) return undefined;
+  return clientToProvider(client, defaultChain);
 }
 
-export async function walletClientToSigner(walletClient) {
-  const { chain, transport } = walletClient;
+export async function walletClientToSigner(walletClient, defaultChain: Chain) {
+  let { chain, transport } = walletClient;
+  if (!chain) {
+    chain = defaultChain;
+  }
   const network = {
     chainId: chain.id,
     name: chain.name,
@@ -40,10 +47,10 @@ export async function walletClientToSigner(walletClient) {
 }
 
 /** Action to convert a viem Wallet Client to an ethers.js Signer. */
-export async function getEthersSigner({ chainId }: { chainId?: number } = {}) {
+export async function getEthersSigner({ chainId }: { chainId?: number } = {}, defaultChain: Chain) {
   const client = await getWalletClient(wagmiConfig, {
-    chainId
+    chainId: (chainId || defaultChain.id) as any
   });
   if (!client) return undefined;
-  return walletClientToSigner(client);
+  return walletClientToSigner(client, defaultChain);
 }
