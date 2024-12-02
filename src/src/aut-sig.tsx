@@ -42,22 +42,27 @@ export const validateAndGetCacheAuthSig = async (
     return null;
   }
   const signerAddress = getAddress((await provider.getSigner()).address);
-  const { sig, signedMessage, address } = authSig;
-  const recoveredAddress = verifyMessage(signedMessage, sig).toLowerCase();
-  const sameAddress =
-    recoveredAddress === address.toLowerCase() &&
-    recoveredAddress === signerAddress.toLowerCase();
-  const message: SiweMessage = new SiweMessage(signedMessage);
-  const response = await message.verify(
-    {
-      signature: sig,
-      time: new Date().toISOString()
-    },
-    {
-      provider
+  try {
+    const { sig, signedMessage, address } = authSig;
+    const recoveredAddress = verifyMessage(signedMessage, sig).toLowerCase();
+    const sameAddress =
+      recoveredAddress === address.toLowerCase() &&
+      recoveredAddress === signerAddress.toLowerCase();
+    const message: SiweMessage = new SiweMessage(signedMessage);
+    const response = await message.verify(
+      {
+        signature: sig,
+        time: new Date().toISOString()
+      },
+      {
+        provider
+      }
+    );
+    if (!response.success || !sameAddress || chainId !== message.chainId) {
+      localStorage.removeItem(LOCAL_STORAGE_KEY);
+      return null;
     }
-  );
-  if (!response.success || !sameAddress || chainId !== message.chainId) {
+  } catch (e) {
     localStorage.removeItem(LOCAL_STORAGE_KEY);
     return null;
   }
